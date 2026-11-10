@@ -1,21 +1,24 @@
 const $=s=>document.querySelector(s), KEY='starry-ledger-v1';
-$('#app-version')?.replaceChildren('v1.1.4');
+$('#app-version')?.replaceChildren('v1.2.0');
+const defaultEmojis=names=>Object.fromEntries(names.map(n=>[n,Object.hasOwn(EMOJI,n)?EMOJI[n]:'✧']));
+let artistEmojis=defaultEmojis(ARTISTS.slice(1));
 let artists=ARTISTS.slice(1),records=LedgerModel.normalize(SEED),page='all',artist='全部';
-try{const saved=localStorage.getItem(KEY);if(saved){const data=LedgerModel.decode(JSON.parse(saved),artists,CATEGORIES);artists=data.artists;records=data.records}}catch{alert('無法讀取已存資料，已載入原始紀錄。請先匯出備份，避免覆蓋舊資料。')}
+try{const saved=localStorage.getItem(KEY);if(saved){const data=LedgerModel.decode(JSON.parse(saved),artists,CATEGORIES);artists=data.artists;records=data.records;artistEmojis={...defaultEmojis(artists),...data.artistEmojis}}}catch{alert('無法讀取已存資料，已載入原始紀錄。請先匯出備份，避免覆蓋舊資料。')}
 const recordArtists=LedgerModel.tags;
+const emojiFor=a=>a==='全部'?'✳':(Object.hasOwn(artistEmojis,a)?artistEmojis[a]:'✧');
 const money=n=>new Intl.NumberFormat('zh-TW',{maximumFractionDigits:2}).format(n);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isEvent=r=>['演唱會','見面會 / FAN-CON','音樂節 / 公開演出'].includes(r.category);
 function validRecords(a,names=artists){return LedgerModel.validRecords(a,names,CATEGORIES)}
 function toast(s){$('#toast').textContent=s;$('#toast').style.display='block';setTimeout(()=>$('#toast').style.display='none',2600)}
-function save(next,nextArtists=artists){try{localStorage.setItem(KEY,JSON.stringify({version:2,artists:nextArtists,records:next}));records=next;artists=nextArtists;return true}catch{alert('儲存失敗，瀏覽器空間可能不足。此次變更未儲存，請先匯出備份。');return false}}
+function save(next,nextArtists=artists,nextEmojis=artistEmojis){try{localStorage.setItem(KEY,JSON.stringify({version:2,artists:nextArtists,artistEmojis:nextEmojis,records:next}));records=next;artists=nextArtists;artistEmojis=nextEmojis;return true}catch{alert('儲存失敗，瀏覽器空間可能不足。此次變更未儲存，請先匯出備份。');return false}}
 function render(){const events=records.filter(isEvent),goods=records.filter(r=>!isEvent(r));$('#overview').innerHTML=[['收藏花費',`<small>NT$</small>${money(goods.reduce((sum,r)=>sum+r.amount,0))}`,`${goods.length} 件收藏 · 專輯、周邊與品牌產品`,'♧'],['演出花費',`<small>NT$</small>${money(events.reduce((sum,r)=>sum+r.amount,0))}`,`${events.length} 場演出 · 演唱會、見面會與音樂節`,'♬'],['待確認收貨',`${records.filter(r=>!r.received).length} <small>筆</small>`,'包含待確認的實體收藏與票券','▱'],['演出回憶',`${events.length} <small>場</small>`,'演唱會、見面會與音樂節','♬']].map(([l,v,n,i])=>`<div class="metric"><span class="metric-icon">${i}</span><div class="metric-label">${l}</div><div class="metric-value">${v}</div><div class="metric-note">${n}</div></div>`).join('');
 $('#ledger').hidden=page==='stats';$('#stats').hidden=page!=='stats';$('#crumb').textContent=page==='events'?'演出足跡':page==='stats'?'花費統計':'收藏帳本';$('#title').innerHTML=page==='events'?'每一次見面，都閃閃發光 <span>♬</span>':page==='stats'?'喜歡的份量，一目瞭然 <span>◷</span>':'把喜歡，一件件收藏 <span>✧</span>';$('#subtitle').textContent=page==='stats'?'用數字回顧那些心動，為下一份喜歡留下空間。':page==='events'?'記下每一場相遇，把現場的感動好好珍藏。':'從一張專輯到一場見面，每一筆都是心動的證明。';if(page==='stats'){renderStats();return}renderRows()}
-function renderRows(){const base=records.filter(r=>page==='events'?isEvent(r):!isEvent(r));const selectedCategory=$('#category').value;$('#category').innerHTML='<option value="">所有分類</option>'+CATEGORIES.filter(c=>page==='events'?isEvent({category:c}):!isEvent({category:c})).map(c=>`<option>${esc(c)}</option>`).join('');$('#category').value=Array.from($('#category').options).some(o=>o.value===selectedCategory)?selectedCategory:'';$('#list-title').innerHTML=`${page==='events'?'我的演出足跡':'我的收藏'} <span>${base.length}</span>`;$('#artists').innerHTML=['全部',...artists].map(a=>`<button data-artist="${esc(a)}" class="${artist===a?'active':''}">${EMOJI[a]||'✳'} ${esc(a)} <small>${a==='全部'?base.length:base.filter(r=>recordArtists(r).includes(a)).length}</small></button>`).join('');const term=$('#search').value.toLowerCase();const list=base.filter(r=>(artist==='全部'||recordArtists(r).includes(artist))&&(!$('#category').value||r.category===$('#category').value)&&(!$('#status').value||r.received===($('#status').value==='received'))&&[r.name,r.channel,r.note,...recordArtists(r)].join(' ').toLowerCase().includes(term));$('#rows').innerHTML=list.map(r=>`<tr><td><div class="item"><div class="item-icon">${isEvent(r)?'♫':r.category==='專輯'?'▣':r.category==='品牌產品'?'♧':r.category==='出版品'?'▤':'✧'}</div><div><div class="item-title">${esc(r.name)}</div><div class="item-note">${esc([r.date,r.note].filter(Boolean).join(' · ')||'收藏生活裡的一點心動')}</div></div></td><td><div class="record-tags">${recordArtists(r).map(a=>`<span class="tag ${a==='Ling'?'ling':a==='Orm'?'orm':a==='LingOrm'?'lo':a.includes('MAMAMOO')?'group':''}">${EMOJI[a]||'✧'} ${esc(a)}</span>`).join('')}</div></td><td><span class="category">${esc(r.category)}</span></td><td class="amount">${r.note.includes('約略')?'≈ ':''}$ ${money(r.amount)}</td><td>${esc(r.channel||'待補')}<div class="payment">${esc(r.payment)}</div></td><td><input type="checkbox" data-received="${esc(r.id)}" ${r.received?'checked':''} aria-label="${esc(r.name)} 已收到"></td><td><button class="row-action" data-edit="${esc(r.id)}" aria-label="編輯 ${esc(r.name)}">✎</button><button class="row-action" data-delete="${esc(r.id)}" aria-label="刪除 ${esc(r.name)}">×</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">還沒有符合的紀錄，試試調整篩選或新增一份喜歡。</td></tr>';$('#results').textContent=`共 ${list.length} 筆紀錄 · 篩選金額 NT$ ${money(list.reduce((a,r)=>a+r.amount,0))}`}
+function renderRows(){const base=records.filter(r=>page==='events'?isEvent(r):!isEvent(r));const selectedCategory=$('#category').value;$('#category').innerHTML='<option value="">所有分類</option>'+CATEGORIES.filter(c=>page==='events'?isEvent({category:c}):!isEvent({category:c})).map(c=>`<option>${esc(c)}</option>`).join('');$('#category').value=Array.from($('#category').options).some(o=>o.value===selectedCategory)?selectedCategory:'';$('#list-title').innerHTML=`${page==='events'?'我的演出足跡':'我的收藏'} <span>${base.length}</span>`;$('#artists').innerHTML=['全部',...artists].map(a=>`<button data-artist="${esc(a)}" class="${artist===a?'active':''}">${esc(emojiFor(a))} ${esc(a)} <small>${a==='全部'?base.length:base.filter(r=>recordArtists(r).includes(a)).length}</small></button>`).join('');const term=$('#search').value.toLowerCase();const list=base.filter(r=>(artist==='全部'||recordArtists(r).includes(artist))&&(!$('#category').value||r.category===$('#category').value)&&(!$('#status').value||r.received===($('#status').value==='received'))&&[r.name,r.channel,r.note,...recordArtists(r)].join(' ').toLowerCase().includes(term));$('#rows').innerHTML=list.map(r=>`<tr><td><div class="item"><div class="item-icon">${isEvent(r)?'♫':r.category==='專輯'?'▣':r.category==='品牌產品'?'♧':r.category==='出版品'?'▤':'✧'}</div><div><div class="item-title">${esc(r.name)}</div><div class="item-note">${esc([r.date,r.note].filter(Boolean).join(' · ')||'收藏生活裡的一點心動')}</div></div></td><td><div class="record-tags">${recordArtists(r).map(a=>`<span class="tag ${a==='Ling'?'ling':a==='Orm'?'orm':a==='LingOrm'?'lo':a.includes('MAMAMOO')?'group':''}">${esc(emojiFor(a))} ${esc(a)}</span>`).join('')}</div></td><td><span class="category">${esc(r.category)}</span></td><td class="amount">${r.note.includes('約略')?'≈ ':''}$ ${money(r.amount)}</td><td>${esc(r.channel||'待補')}<div class="payment">${esc(r.payment)}</div></td><td><input type="checkbox" data-received="${esc(r.id)}" ${r.received?'checked':''} aria-label="${esc(r.name)} 已收到"></td><td><button class="row-action" data-edit="${esc(r.id)}" aria-label="編輯 ${esc(r.name)}">✎</button><button class="row-action" data-delete="${esc(r.id)}" aria-label="刪除 ${esc(r.name)}">×</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">還沒有符合的紀錄，試試調整篩選或新增一份喜歡。</td></tr>';$('#results').textContent=`共 ${list.length} 筆紀錄 · 篩選金額 NT$ ${money(list.reduce((a,r)=>a+r.amount,0))}`}
 function renderStats(){const oldArtist=$('#stats-artist')?.value||'',oldCat=$('#stats-category')?.value||'',oldYear=$('#stats-year')?.value||'';$('#stats').innerHTML=`<div class="stats-filter"><select id="stats-artist"><option value="">所有藝人</option>${artists.map(a=>`<option>${esc(a)}</option>`).join('')}</select><select id="stats-category"><option value="">所有分類</option>${CATEGORIES.map(a=>`<option>${esc(a)}</option>`).join('')}</select><select id="stats-year"><option value="">所有年份（含未填日期）</option><option value="undated">未填日期</option>${[...new Set(records.map(r=>r.date.slice(0,4)).filter(Boolean))].sort().map(y=>`<option>${y}</option>`).join('')}</select></div><div id="stats-body"></div>`;$('#stats-artist').value=oldArtist;$('#stats-category').value=oldCat;$('#stats-year').value=oldYear;updateStats();['#stats-artist','#stats-category','#stats-year'].forEach(s=>$(s).onchange=updateStats)}
 function updateStats(){const a=$('#stats-artist').value,c=$('#stats-category').value,y=$('#stats-year').value;const list=records.filter(r=>(!a||recordArtists(r).includes(a))&&(!c||r.category===c)&&(!y||(y==='undated'?!r.date:r.date.startsWith(y))));const total=list.reduce((s,r)=>s+r.amount,0);function chart(field,title){const groups=Object.create(null);list.forEach(r=>(field==='artist'?recordArtists(r):[r[field]]).forEach(k=>groups[k]=(groups[k]||0)+r.amount));return `<div class="chart"><h2>${title}</h2>${Object.entries(groups).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="bar-label"><span>${esc(k)}</span><span>NT$ ${money(v)} · ${total?(v/total*100).toFixed(1):0}%</span></div><div class="bar-track"><div class="bar-fill" style="width:${total?v/total*100:0}%"></div></div>`).join('')||'<p>沒有符合條件的紀錄</p>'}</div>`}$('#stats-body').innerHTML=`<div class="stats-total">${list.length} 筆紀錄的花費 <strong>NT$ ${money(total)}</strong><p>以已登錄金額計算，包含未收貨與約略金額；未填運費不另計。複選藝人的紀錄會完整計入各藝人的花費，藝人占比可能合計超過 100%；上方總額與分類統計每筆只計一次。</p></div><div class="chart-grid">${chart('artist','依藝人 / 團體')}${chart('category','依品項分類')}</div>`}
 const form=$('#record-form');form.elements.category.innerHTML=CATEGORIES.map(a=>`<option>${esc(a)}</option>`).join('');$('#category').innerHTML+=CATEGORIES.map(a=>`<option>${esc(a)}</option>`).join('');
-function renderArtistPicker(selected=[]){$('#artist-picker').innerHTML=artists.map(a=>`<label class="artist-option"><input type="checkbox" name="artists" value="${esc(a)}" ${selected.includes(a)?'checked':''}> ${EMOJI[a]||'✧'} ${esc(a)}</label>`).join('')}
+function renderArtistPicker(selected=[]){$('#artist-picker').innerHTML=artists.map(a=>`<label class="artist-option"><input type="checkbox" name="artists" value="${esc(a)}" ${selected.includes(a)?'checked':''}> ${esc(emojiFor(a))} ${esc(a)}</label>`).join('')}
 function edit(id){form.reset();$('#form-error').textContent='';const r=records.find(r=>r.id===id);form.elements.id.value=id||'';if(r)Object.keys(r).forEach(k=>{if(k!=='artists'&&form.elements[k]){if(k==='received')form.elements[k].checked=r[k];else form.elements[k].value=r[k]}});else if(page==='events')form.elements.category.value='演唱會';renderArtistPicker(r?recordArtists(r):[]);$('#modal-title').textContent=r?'編輯紀錄':'新增收藏紀錄';$('#editor').showModal()}
 $('#add').onclick=()=>edit();$('#close').onclick=$('#cancel').onclick=()=>$('#editor').close();
 function newRecordId(){
@@ -57,7 +60,7 @@ $('nav').onclick=e=>{const b=e.target.closest('[data-page]');if(!b)return;page=b
 $('#artists').onclick=e=>{const b=e.target.closest('[data-artist]');if(b){artist=b.dataset.artist;renderRows()}};['#search','#category','#status'].forEach(s=>$(s).addEventListener(s==='#search'?'input':'change',renderRows));
 $('#rows').onchange=e=>{const id=e.target.dataset.received;if(id){if(save(records.map(r=>r.id===id?{...r,received:e.target.checked}:r)))toast(e.target.checked?'已確認收到 ♡':'已改為待確認收貨');render()}};
 $('#rows').onclick=e=>{const editId=e.target.closest('[data-edit]')?.dataset.edit,deleteId=e.target.closest('[data-delete]')?.dataset.delete;if(editId)edit(editId);if(deleteId&&confirm('確定刪除此筆紀錄？此操作無法復原。')){if(save(records.filter(r=>r.id!==deleteId))){render();toast('已刪除紀錄')}}};
-$('#export').onclick=()=>{const blob=new Blob([JSON.stringify({version:2,artists,records},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`星藏備份-${new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Taipei'})}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('備份已匯出，請妥善保存')};
+$('#export').onclick=()=>{const blob=new Blob([JSON.stringify({version:2,artists,artistEmojis,records},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`星藏備份-${new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Taipei'})}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('備份已匯出，請妥善保存')};
 let pendingImport=null;
 $('#import').onclick=()=>$('#import-file').click();
 $('#cancel-import').onclick=()=>{pendingImport=null;$('#import-dialog').close()};
@@ -77,7 +80,7 @@ $('#import-file').onchange=async e=>{
 $('#confirm-import').onclick=()=>{
  if(!pendingImport)return;
  const data=pendingImport;
- if(!save(data.records,data.artists)){$('#import-message').textContent='匯入未完成：瀏覽器無法儲存資料，原有紀錄未更動。請檢查網站儲存權限後重試。';return}
+ if(!save(data.records,data.artists,{...defaultEmojis(data.artists),...data.artistEmojis})){$('#import-message').textContent='匯入未完成：瀏覽器無法儲存資料，原有紀錄未更動。請檢查網站儲存權限後重試。';return}
  pendingImport=null;artist='全部';$('#search').value='';$('#category').value='';$('#status').value='';
  render();$('#import-dialog').close();
  const received=records.filter(r=>r.received).length;
@@ -85,24 +88,39 @@ $('#confirm-import').onclick=()=>{
  $('#import-result').textContent=`匯入完成：共 ${records.length} 筆，已收到 ${received} 筆、待確認收貨 ${records.length-received} 筆。`;
  toast('備份匯入完成');
 };
+function artistManagerRow(original,name,emoji){
+ const used=original===null?0:records.filter(r=>recordArtists(r).includes(original)).length;
+ const row=document.createElement('div');row.className='artist-manager-row';
+ if(original!==null)row.dataset.original=original;
+ row.innerHTML=`<label class="emoji-field"><span>Emoji</span><input data-artist-emoji aria-label="${esc(name)}的 emoji" value="${esc(emoji)}" maxlength="60" placeholder="✧"></label><label class="artist-name-field"><span>藝人名稱</span><input data-artist-name aria-label="藝人分類名稱" value="${esc(name)}" maxlength="60"></label><small>${used} 筆</small><button type="button" class="delete-artist" ${used?'disabled':''} title="${used?'仍有收藏或演出紀錄，無法刪除':'刪除此分類，按儲存後生效'}" aria-label="刪除 ${esc(name)}">刪除</button>`;
+ return row;
+}
 function renderArtistManager(){
- $('#artist-manager-list').innerHTML=artists.map((a,i)=>`<label class="artist-manager-row"><span>${EMOJI[a]||'✧'}</span><input data-artist-index="${i}" aria-label="藝人分類 ${i+1}" value="${esc(a)}" maxlength="60"><small>${records.filter(r=>recordArtists(r).includes(a)).length} 筆</small></label>`).join('');
- $('#artist-manager-error').textContent='';$('#new-artist').value='';
+ $('#artist-manager-list').replaceChildren(...artists.map(a=>artistManagerRow(a,a,emojiFor(a))));
+ $('#artist-manager-error').textContent='';$('#new-artist').value='';$('#new-artist-emoji').value='';
 }
 $('#manage-artists').onclick=()=>{renderArtistManager();$('#artist-manager').showModal()};
 $('#close-artists').onclick=()=>$('#artist-manager').close();
+$('#artist-manager-list').onclick=e=>{
+ const button=e.target.closest('.delete-artist');if(!button||button.disabled)return;
+ const row=button.closest('.artist-manager-row');
+ if(row.dataset.original&&records.some(r=>recordArtists(r).includes(row.dataset.original))){$('#artist-manager-error').textContent='仍有收藏或演出紀錄，無法刪除此分類。';return}
+ row.remove();$('#artist-manager-error').textContent='分類已從編輯清單移除，按「儲存藝人分類」後生效。';
+};
 $('#add-artist-row').onclick=()=>{
- const name=$('#new-artist').value.trim(),inputs=Array.from($('#artist-manager-list').querySelectorAll('input'));
- if(!name||name==='全部'||inputs.some(input=>input.value.trim()===name)||inputs.length>=200){$('#artist-manager-error').textContent='請輸入不同的分類名稱（不可使用「全部」），最多 200 個。';return}
- const row=document.createElement('label');row.className='artist-manager-row';row.innerHTML=`<span>✧</span><input data-artist-index="${inputs.length}" aria-label="藝人分類 ${inputs.length+1}" value="${esc(name)}" maxlength="60"><small>新增</small>`;
- $('#artist-manager-list').append(row);$('#new-artist').value='';$('#artist-manager-error').textContent='';row.querySelector('input').focus();
+ const name=$('#new-artist').value.trim(),emoji=$('#new-artist-emoji').value.trim();
+ const rows=Array.from($('#artist-manager-list').querySelectorAll('.artist-manager-row'));
+ if(!name||name==='全部'||rows.some(r=>r.querySelector('[data-artist-name]').value.trim()===name)||rows.length>=200){$('#artist-manager-error').textContent='請輸入不同的分類名稱（不可使用「全部」），最多 200 個。';return}
+ const row=artistManagerRow(null,name,emoji);$('#artist-manager-list').append(row);
+ $('#new-artist').value='';$('#new-artist-emoji').value='';$('#artist-manager-error').textContent='';row.querySelector('[data-artist-name]').focus();
 };
 $('#save-artists').onclick=()=>{
- const names=Array.from($('#artist-manager-list').querySelectorAll('input'),input=>input.value.trim());
- if(!LedgerModel.validArtists(names)){$('#artist-manager-error').textContent='分類名稱不得空白或重複，不可使用「全部」，每個名稱最多 60 字。';return}
- const renamed=new Map(artists.map((a,i)=>[a,names[i]]));
- const next=records.map(r=>{const updated={...r,artists:recordArtists(r).map(a=>renamed.get(a)||a)};delete updated.artist;return updated});
- if(save(next,names)){artist=renamed.get(artist)||artist;$('#artist-manager').close();render();toast('已儲存藝人分類，相關紀錄已同步更新')}
+ try{
+ const edits=Array.from($('#artist-manager-list').querySelectorAll('.artist-manager-row'),row=>({original:row.dataset.original??null,name:row.querySelector('[data-artist-name]').value.trim(),emoji:row.querySelector('[data-artist-emoji]').value.trim()}));
+ const result=LedgerModel.editArtists(records,artists,edits);
+ const renamed=new Map(edits.filter(e=>e.original!==null).map(e=>[e.original,e.name]));
+ if(save(result.records,result.artists,result.artistEmojis)){artist=renamed.get(artist)||'全部';$('#artist-manager').close();render();toast('已儲存藝人分類與 emoji')}
+ }catch(error){$('#artist-manager-error').textContent=error.message}
 };
 const SIDEBAR_KEY='starry-sidebar-collapsed';
 function setSidebarCollapsed(collapsed){
