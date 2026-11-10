@@ -1,4 +1,5 @@
 const $=s=>document.querySelector(s), KEY='starry-ledger-v1';
+$('#app-version')?.replaceChildren('v1.1.4');
 let artists=ARTISTS.slice(1),records=LedgerModel.normalize(SEED),page='all',artist='全部';
 try{const saved=localStorage.getItem(KEY);if(saved){const data=LedgerModel.decode(JSON.parse(saved),artists,CATEGORIES);artists=data.artists;records=data.records}}catch{alert('無法讀取已存資料，已載入原始紀錄。請先匯出備份，避免覆蓋舊資料。')}
 const recordArtists=LedgerModel.tags;
